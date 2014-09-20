@@ -1,0 +1,128 @@
+
+# Preface
+
+Multiple approaches were attempted in exploratory graphing, however none of the techniques attempted led to any
+insights to the data, so those attempts are not documented here.
+
+# Method
+
+The data is cleaned by converting all columns in the data set except the 'classe' and initial five data field to numeric.  To avoid imputing the data, all columns that contained no NA values across the entire dataset were selected for training.  In this data set, this was sufficient for an acceptable error rate.
+
+The Random Forest model was chosen due to accuracy observed in cross-validation of the training set.  Cross validation is performed using createDataPartition to segment the training data into further training and testing data.
+
+The "doMC" library is utilized to parallelize computations across multiple cores. Testing with PCA led to less accurate results, causing it to be abandoned in favor of using all features.  Imputing the features that contain NAs may have resulted in a more accurate model.
+
+# Results
+```{r,echo=FALSE,message=FALSE,warning=FALSE}
+
+library(caret)
+library(ggplot2)
+
+# Parallelize to seven processes.  On a hyperthreaded quad core, this almost fully utilizes 7 cores and leaves one for system processes.
+library(doMC)
+registerDoMC(cores = 7)
+
+originalData = read.csv2("data/pml-training.csv", header=TRUE, sep = ",",na.strings = c("NA","#DIV/0!"))
+
+# There is likely a faster and more idiomatic R way of doing this, but it escapes me.
+for(i in 5:159) {
+  originalData[,i] <- as.numeric(originalData[,i])
+}
+
+providedTestData = read.csv2("data/pml-testing.csv", header=TRUE, sep = ",",na.strings = c("NA","#DIV/0!"))
+for(i in 5:159) {
+  providedTestData[,i] <- as.numeric(providedTestData[,i])
+}
+
+inTrain <- createDataPartition(y=originalData$classe, p=0.7, list=FALSE)
+training <- originalData[inTrain,]
+testing <- originalData[-inTrain,]
+
+set.seed(12345)
+
+# Fit with all non-NA features. This is a function to make it easy to disable when doing other troubleshooting
+ 
+ x<- function () {
+  train(classe ~ 
+roll_belt+
+pitch_belt+
+yaw_belt+
+total_accel_belt+
+gyros_belt_x+
+gyros_belt_y+
+gyros_belt_z+
+accel_belt_x+
+accel_belt_y+
+accel_belt_z+
+magnet_belt_x+
+magnet_belt_y+
+magnet_belt_z+
+roll_arm+
+pitch_arm+
+yaw_arm+
+total_accel_arm+
+gyros_arm_x+
+gyros_arm_y+
+gyros_arm_z+
+accel_arm_x+
+accel_arm_y+
+accel_arm_z+
+magnet_arm_x+
+magnet_arm_y+
+magnet_arm_z+
+roll_dumbbell+
+pitch_dumbbell+
+yaw_dumbbell+
+total_accel_dumbbell+
+gyros_dumbbell_x+
+gyros_dumbbell_y+
+gyros_dumbbell_z+
+accel_dumbbell_x+
+accel_dumbbell_y+
+accel_dumbbell_z+
+magnet_dumbbell_x+
+magnet_dumbbell_y+
+magnet_dumbbell_z+
+roll_forearm+
+pitch_forearm+
+yaw_forearm+
+total_accel_forearm+
+gyros_forearm_x+
+gyros_forearm_y+
+gyros_forearm_z+
+accel_forearm_x+
+accel_forearm_y+
+accel_forearm_z+
+magnet_forearm_x+
+magnet_forearm_y+
+magnet_forearm_z
+, data=training,method="rf")
+}
+
+modFit <- x()
+
+testingPredictions <- predict(modFit,newdata=testing)
+
+tt <- testingPredictions == testing$classe
+summary(tt)
+
+print(paste("The out of sample accuracy was", length(tt[tt==TRUE])/length(tt)))
+
+# Once collected and submitted, there is no need to continue to process this data.
+
+#pred <- predict(modFit,newdata=providedTestData)
+#pml_write_files = function(x){
+#  n = length(x)
+#  for(i in 1:n){
+#    filename = paste0("submit/problem_id_",i,".txt")
+#    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+#  }
+#}
+
+#pml_write_files(pred)
+plot(modFit$finalModel)
+```
+
+# Conclusion
+
+Although the out of sample error rate was good, the submission portion of the project had a high error rate than expected  (12 out of 20), suggesting that the model suffers from overfitting.
